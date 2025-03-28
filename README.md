@@ -5,7 +5,7 @@
 
 This repository includes official implementation for the following papers:
 
-* [OFAKD](https://github.com/Hao840/OFAKD): One-for-All: Bridge the Gap Between Heterogeneous Architectures in Knowledge Distillation
+
 
 * ICCV 2023: [NKD and USKD](https://github.com/yzd-v/cls_KD/blob/1.0/nkd.md): From Knowledge Distillation to Self-Knowledge Distillation: A Unified Approach with Normalized Loss and Customized Soft Labels
 
