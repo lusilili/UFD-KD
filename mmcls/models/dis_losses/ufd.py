@@ -229,9 +229,11 @@ class AttentionProjector(nn.Module):
 
         self.proj_student = nn.Sequential(nn.Conv2d(student_dims, student_dims, 3, stride=1, padding=1),
                                       nn.BatchNorm2d(student_dims),
-                                      nn.ReLU())
+                                      nn.ReLU(),
+                                      nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
+                                      )
 
-        self.pos_embed = nn.Parameter(torch.zeros(1, student_dims, pos_hw[0], pos_hw[1]), requires_grad=True)
+        self.pos_embed = nn.Parameter(torch.zeros(1, student_dims, *self.pos_hw), requires_grad=True)
         self.pos_attention = WindowMultiheadPosAttention(teacher_dims, num_heads=num_heads, input_dims=student_dims, pos_dims=pos_dims, window_shapes=window_shapes, softmax_scale=softmax_scale)
         self.ffn = FFN(embed_dims=teacher_dims, feedforward_channels=teacher_dims * 4)
 
