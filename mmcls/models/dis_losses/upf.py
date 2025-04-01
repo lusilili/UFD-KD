@@ -13,7 +13,7 @@ from mmcv.cnn.bricks.transformer import FFN, PatchMerging
 
 # frequency domin filtered in h*w decouple
 @MODELS.register_module()
-class UnifiedPathDynamicWeightFreqLoss(nn.Module):
+class UnifiedFreqDecoupleLoss(nn.Module):
     def __init__(self,
                  name,
                  use_this,
@@ -29,13 +29,16 @@ class UnifiedPathDynamicWeightFreqLoss(nn.Module):
                  dis_freq='high',
                  num_heads=8,
                  ):
-        super(UnifiedPathDynamicWeightFreqLoss, self).__init__()
+        super(UnifiedFreqDecoupleLoss, self).__init__()
         self.dis_freq = dis_freq
         self.self_query = self_query
         self.alpha_jfd = alpha_jfd
         
-        self.projector_0 = AttentionProjector(student_dims, teacher_dims, query_hw, pos_dims, window_shapes=window_shapes, self_query=self_query, softmax_scale=softmax_scale[1], num_heads=num_heads)
-        self.projector_1 = AttentionProjector(student_dims, teacher_dims, query_hw, pos_dims, window_shapes=window_shapes, self_query=self_query, softmax_scale=softmax_scale[1], num_heads=num_heads)
+        self.projector_0 = AttentionProjector(student_dims, teacher_dims, query_hw, pos_hw, pos_dims, window_shapes=window_shapes, self_query=self_query, softmax_scale=softmax_scale[0], num_heads=num_heads)
+        self.projector_1 = AttentionProjector(student_dims, teacher_dims, query_hw, pos_hw, pos_dims, window_shapes=window_shapes, self_query=self_query, softmax_scale=softmax_scale[1], num_heads=num_heads)
+        # # MGD
+        # self.projector_0 = self._build_mgd_projector(student_dims, teacher_dims)
+        # self.projector_1 = self._build_mgd_projector(student_dims, teacher_dims)
         
         # 权重超参
         self.alpha_dc = self.alpha_jfd[0]
@@ -43,6 +46,20 @@ class UnifiedPathDynamicWeightFreqLoss(nn.Module):
         self.alpha_dc_1d = self.alpha_jfd[2]
         self.alpha_ac_1d = self.alpha_jfd[3]
 
+    # MGD
+    # def _build_mgd_projector(self, in_dims, out_dims):
+    #     """MGD Projector"""
+    #     return nn.Sequential(
+    #         # 通道对齐层（当维度不匹配时）
+    #         nn.Conv2d(in_dims, out_dims, 1) if in_dims != out_dims else nn.Identity(),
+    #         # MGD核心生成器结构
+    #         nn.Conv2d(out_dims, out_dims, 3, padding=1),
+    #         nn.BatchNorm2d(out_dims),  # 新增BN层提升稳定性
+    #         nn.ReLU(inplace=True),
+    #         nn.Conv2d(out_dims, out_dims, 3, padding=1),
+    #         nn.BatchNorm2d(out_dims)   # 输出归一化
+    #    )
+    
     def forward(self,
                 preds_S,
                 preds_T,
@@ -54,6 +71,16 @@ class UnifiedPathDynamicWeightFreqLoss(nn.Module):
             preds_S(Tensor): Bs*C*H*W, student's feature map
             preds_T(Tensor): Bs*C*H*W, teacher's feature map
         """
+        # print(preds_S.shape)
+        # print(preds_T.shape)
+    
+        # # 获取学生特征的空间尺寸 (H, W)
+        # output_size = (preds_S.size(2), preds_S.size(3))  # 假设preds_S形状为 [B, C, H, W]
+    
+        # # 对教师特征自适应下采样至 H x W
+        # preds_T = F.adaptive_avg_pool2d(preds_T, output_size=output_size)
+        # preds_T = F.adaptive_avg_pool2d(preds_T, output_size=(7, 7))
+        
         # print(preds_S.shape)
         # print(preds_T.shape)
         
@@ -71,6 +98,15 @@ class UnifiedPathDynamicWeightFreqLoss(nn.Module):
     def project_feat_channel(self, preds_S, query=None):
         preds_S = self.projector_1(preds_S, query=query)
         return preds_S
+    
+    # # MGD
+    # def project_feat_spat(self, preds_S, query=None):
+    #     preds_S = self.projector_0(preds_S)
+    #     return preds_S.flatten(2)
+
+    # def project_feat_channel(self, preds_S, query=None):
+    #     preds_S = self.projector_1(preds_S)
+    #     return preds_S.flatten(2)
 
 
     # 空间维度：直流交流解耦
@@ -172,7 +208,8 @@ class AttentionProjector(nn.Module):
     def __init__(self,
                  student_dims,
                  teacher_dims,
-                 hw_dims,
+                 query_hw,
+                 pos_hw,
                  pos_dims,
                  window_shapes=(1,1),
                  self_query=True,
@@ -181,7 +218,8 @@ class AttentionProjector(nn.Module):
                  ):
         super(AttentionProjector, self).__init__()
 
-        self.hw_dims = hw_dims
+        self.query_hw = query_hw
+        self.pos_hw = pos_hw
         self.student_dims = student_dims
         self.teacher_dims = teacher_dims
 
@@ -191,16 +229,17 @@ class AttentionProjector(nn.Module):
 
         self.proj_student = nn.Sequential(nn.Conv2d(student_dims, student_dims, 3, stride=1, padding=1),
                                       nn.BatchNorm2d(student_dims),
-                                      nn.ReLU())
+                                      nn.ReLU(),
+                                      )
 
-        self.pos_embed = nn.Parameter(torch.zeros(1, student_dims, hw_dims[0], hw_dims[1]), requires_grad=True)
+        self.pos_embed = nn.Parameter(torch.zeros(1, student_dims, pos_hw[0], pos_hw[1]), requires_grad=True)
         self.pos_attention = WindowMultiheadPosAttention(teacher_dims, num_heads=num_heads, input_dims=student_dims, pos_dims=pos_dims, window_shapes=window_shapes, softmax_scale=softmax_scale)
         self.ffn = FFN(embed_dims=teacher_dims, feedforward_channels=teacher_dims * 4)
 
         self.norm = nn.LayerNorm([teacher_dims])
 
         if self_query:
-            self.query = nn.Embedding(hw_dims[0] * hw_dims[1], teacher_dims)
+            self.query = nn.Embedding(query_hw[0] * query_hw[1], teacher_dims)
         else:
             self.query = None
 
@@ -209,21 +248,21 @@ class AttentionProjector(nn.Module):
 
 
     def forward(self, x, query=None):
-        H, W = self.hw_dims
+        H, W = self.query_hw
         N = x.shape[0]
 
         if query is not None:
-            pos_emb = query.permute(0,2,1).reshape(N, -1, H, W).contiguous()
+            query = query.permute(0,2,1).reshape(N, -1, H, W).contiguous()
         elif self.query is not None:
-            pos_emb = self.query.weight.view(1,H,W,self.teacher_dims).permute(0,3,1,2).repeat(N,1,1,1)
+            query = self.query.weight.view(1,H,W,self.teacher_dims).permute(0,3,1,2).repeat(N,1,1,1)
         else:
             raise NotImplementedError("There is no query!")
 
         preds_S = self.proj_student(x) + self.pos_embed.to(x.device)
-        pos_emb = self.proj_pos(pos_emb)
-        pos_emb = torch.flatten(pos_emb.permute(0, 2, 3, 1), 1, 2)
+        query = self.proj_pos(query)
+        query = torch.flatten(query.permute(0, 2, 3, 1), 1, 2)
 
-        fea_S = self.pos_attention(torch.flatten(preds_S.permute(0, 2, 3, 1), 1, 2), pos_emb)
+        fea_S = self.pos_attention(torch.flatten(preds_S.permute(0, 2, 3, 1), 1, 2), query)
         fea_S = self.ffn(self.norm(fea_S))
 
         return fea_S
