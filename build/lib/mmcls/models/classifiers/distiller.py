@@ -11,13 +11,14 @@ from torch import Tensor
 from mmcls.models import build_classifier
 from mmcls.registry import MODELS
 from mmcls.structures import ClsDataSample
+from mmengine.model import revert_sync_batchnorm
 
 from mmengine.config import Config
 from mmengine.model import BaseModel
 from mmengine.structures import BaseDataElement
 from mmengine.runner.checkpoint import  load_checkpoint, _load_checkpoint, load_state_dict
 
-@MODELS.register_module()
+@MODELS.register_module(force=True)
 class ClassificationDistiller(BaseModel, metaclass=ABCMeta):
     """Base distiller for dis_classifiers.
 
@@ -31,6 +32,8 @@ class ClassificationDistiller(BaseModel, metaclass=ABCMeta):
                  sd = False,
                  distill_cfg = None,
                  teacher_pretrained = None,
+                 sync_bn=False,
+                 with_cls_token=False,
                  train_cfg: Optional[dict] = None,
                  data_preprocessor: Optional[dict] = None,
                  init_cfg: Optional[dict] = None):
@@ -53,8 +56,12 @@ class ClassificationDistiller(BaseModel, metaclass=ABCMeta):
         self.teacher.eval()
         for param in self.teacher.parameters():
             param.requires_grad = False
+            
 
         self.student = build_classifier((Config.fromfile(student_cfg)).model)
+        if sync_bn:
+            self.student = nn.SyncBatchNorm.convert_sync_batchnorm(self.student)
+            print(self.student)
 
         self.distill_cfg = distill_cfg   
         self.distill_losses = nn.ModuleDict()
@@ -69,12 +76,16 @@ class ClassificationDistiller(BaseModel, metaclass=ABCMeta):
         self.is_vit = is_vit
         self.sd = sd
         self.use_logit = use_logit
+        self.with_cls_token = with_cls_token
 
         if 'loss_tcd' in self.distill_losses.keys():
             self.distill_losses['loss_tcd'].set_head(self.teacher.head)
+        
+        self.linear = nn.Linear(384, 384) 
 
     def init_weights(self):
         if self.teacher_pretrained is not None:
+            # load_checkpoint(self, self.teacher_pretrained, map_location='cpu')
             load_checkpoint(self.teacher, self.teacher_pretrained, map_location='cpu')
         self.student.init_weights()
 
@@ -119,42 +130,42 @@ class ClassificationDistiller(BaseModel, metaclass=ABCMeta):
         if self.student.with_head and hasattr(self.student.head, 'pre_logits'):
             x = self.student.head.pre_logits(x)
 
-        if self.is_vit:
-            logit_s = self.student.head.layers.head(x)
-        else:
-            logit_s = self.student.head.fc(x)
+
+        logit_s = self.student.head.fc(x)
         loss = self.student.head._get_loss(logit_s, data_samples)
 
         s_loss = dict()
         for key in loss.keys():
             s_loss['ori_'+key] = loss[key]
-
-        with torch.no_grad():
-            fea_t = self.teacher.extract_feat(inputs, stage='backbone')
-            if self.use_logit:
-                logit_t = self.teacher.head.layers.head(self.teacher.head.pre_logits(fea_t))
         
 
+        inputs_t = inputs
+
+        with torch.no_grad():
+            fea_t = self.teacher.extract_feat(inputs_t, stage='backbone')
+            if self.use_logit:
+                if self.is_vit:
+                    logit_t = self.teacher.head.fc(fea_t[-1])
+                    # logit_t = self.teacher.head.layers.head(fea_t[-1])
+                else:
+                    logit_t = self.teacher.head.fc(self.teacher.neck(fea_t[-1]))
+        
         all_keys = self.distill_losses.keys()
 
+        # feat_S_s1, feat_S_s2, feat_S_s3, feat_S_s4 = fea_s[0], fea_s[1], fea_s[2], fea_s[3]
 
-        if 'loss_tfd' in all_keys:
-            loss_name = 'loss_tfd'
-            preds_S = fea_s[-1]
-            preds_T = fea_t[-1]
-            # print(preds_S.shape)
-            # print(preds_T.shape)
-            # assert 0 == 1
-            # pos_emb_1 = fea_t[0]   # feature before the first stage
-            pos_emb = fea_t[-2] # feature before the last stage
-            # s_loss[loss_name] = self.distill_losses[loss_name](preds_S, preds_T, pos_emb)
-            s_loss[loss_name] = self.distill_losses[loss_name](preds_S, preds_T, pos_emb)
+        
+        # feat_S_s1, feat_S_s2, feat_S_s3, feat_S_s4 = fea_s[0], fea_s[1], fea_s[-2], fea_s[-1]
+        
+        feat_T_s3, feat_T_s4 = fea_t[-2], fea_t[-1]
+        # print(f"fea_s: {fea_s}") 
+        # print(f"Length of fea_s: {len(fea_s)}")  
+        # for i, feature in enumerate(fea_s):
+        #     print(f"fea_s[{i}] shape: {feature.shape}")
+        # print(len(fea_s))
+        feat_S_s1, feat_S_s2, feat_S_s3, feat_S_s4 = fea_s[0], fea_s[1], fea_s[2], fea_s[3]
+        # feat_T_s1, feat_T_s2, feat_T_s3, feat_T_s4 = fea_t[0], fea_t[1], fea_t[2], fea_t[3]
 
-        if 'loss_mfd' in all_keys:
-            loss_name = 'loss_mfd'
-            fea_t = fea_t[1:]
-            s_loss['loss_mfd_s0'], s_loss['loss_mfd_s1'], s_loss['loss_mfd_s2'], s_loss['loss_mfd_s3'] \
-                = self.distill_losses[loss_name](fea_s, fea_t)
 
         if 'loss_fd' in all_keys:
             loss_name = 'loss_fd'
@@ -163,6 +174,61 @@ class ClassificationDistiller(BaseModel, metaclass=ABCMeta):
             s_loss[loss_name] = self.distill_losses[loss_name](preds_S, preds_T)
 
 
+        feat_S_s3_spat_query, feat_S_s3_freq_query = None, None
+
+        if 'loss_fmd_s3' in all_keys:
+            loss_name = 'loss_fmd_s3'
+
+            if self.distill_losses[loss_name].self_query:
+                query = None
+            else:
+                query = feat_T_s3
+
+            
+            feat_S_s3_spat = self.distill_losses[loss_name].project_feat_spat(feat_S_s3, query=None)
+            feat_S_s3_freq = self.distill_losses[loss_name].project_feat_freq(feat_S_s3, query=None)
+
+            feat_S_s3_spat = self.teacher.backbone.forward_specific_stage(feat_S_s3_spat, 4)
+            feat_S_s3_freq = self.teacher.backbone.forward_specific_stage(feat_S_s3_freq, 4)
+
+            feat_S_s3_spat_query, feat_S_s3_freq_query = feat_S_s3_spat, feat_S_s3_freq
+
+
+            s_loss['loss_s3'] = self.distill_losses[loss_name].get_spat_loss(feat_S_s3_spat, feat_T_s4)
+            s_loss['loss_s3_alt'] = self.distill_losses[loss_name].get_freq_loss(feat_S_s3_freq, feat_T_s4)
+
+        if 'loss_fmd_s4' in all_keys:
+            loss_name = 'loss_fmd_s4'
+            if self.is_vit:
+                feat_S_s4_spat = self.distill_losses[loss_name].project_feat_spat(feat_S_s4, query=feat_S_s3_spat_query)
+                feat_S_s4_freq = self.distill_losses[loss_name].project_feat_freq(feat_S_s4, query=feat_S_s3_freq_query)
+
+                # feat_S_s4_spat = self.teacher.backbone.forward_specific_stage(feat_S_s4_spat, 5)
+                # feat_S_s4_freq = self.teacher.backbone.forward_specific_stage(feat_S_s4_freq, 5)
+
+                s_loss['loss_s4'] = self.distill_losses[loss_name].get_spat_loss(feat_S_s4_spat, feat_T_s4)
+                s_loss['loss_s4_alt'] = self.distill_losses[loss_name].get_freq_loss(feat_S_s4_freq, feat_T_s4)
+            else:
+                s_loss['loss_s4'], s_loss['loss_s4_alt']= self.distill_losses[loss_name](feat_S_s4, feat_T_s4, query_s=feat_S_s3_spat_query, query_f=feat_S_s3_freq_query)
+
+
+        if 'loss_updwfl' in all_keys:
+            loss_name = 'loss_updwfl'
+            
+            upd_loss_spat, upd_loss_channel = self.distill_losses[loss_name](
+                    feat_S_s4, feat_T_s4
+                )
+            # upd_loss_spat = self.distill_losses[loss_name](
+            #     feat_S_s4, feat_T_s4
+            # )
+            # upd_loss_channel = self.distill_losses[loss_name](
+            #     feat_S_s4, feat_T_s4
+            # )
+            
+            s_loss['loss_dc_spat'], s_loss['loss_ac_spat'] = upd_loss_spat
+            s_loss['loss_dc_channel'], s_loss['loss_ac_channel'] = upd_loss_channel
+            # s_loss['loss_channel'] = upd_loss_channel
+            
 
         if ('loss_kd' in all_keys) and self.use_logit:
             loss_name = 'loss_kd'
