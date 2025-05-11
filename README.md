@@ -2,6 +2,15 @@
 
 ![image](https://github.com/user-attachments/assets/cd473ee2-8356-4925-abb9-064c4dbc0eac)
 
+Here are some visulizations for the feature distribution in frequency domain (ViT-large and ResNet18):
+
+![heatmap](https://github.com/user-attachments/assets/5d2dba44-f605-4163-8d33-46cbd5509aba)
+![Distri2](https://github.com/user-attachments/assets/eb753fed-6b29-4a92-a31f-68ae5813add2)
+
+Showing the mismatch of feature distribution across models, which is also the main problem our method tries to resolve, we proposed the UFD framework that decouples the feature in both spatial and channel dimensions to achieve better feature alignment in knowledge distillation.
+
+The strategy we apply for decoupling is quite simple which is based on the basic properties of Frequency domain(DC Components and AC Components). The process is shown as follows:
+![image](https://github.com/user-attachments/assets/3f4489bd-aab2-4080-977c-fb8cf9905823)
 
 This repository includes official implementation for the following papers:
 
