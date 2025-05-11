@@ -42,6 +42,9 @@ If this repository is helpful, please give us a star ⭐ and cite relevant paper
     ```
   - This repo uses mmcls = 1.0.0rc6. If you want to use lower mmcls version for distillation, you can refer branch [master](https://github.com/yzd-v/cls_KD/tree/master) to change the codes.
 
+  - To validate the UFD-KD's capability of different vision task, we transfer this method from image classification to semantic segmentation (using the basic training framework from Af-DCD and its results as baseline), this will be included in the code base soon.
+  - 
+
 ## Run
   - The experiments based on the traditional training strategy are performed on 8 GPUs from a single node.
 
@@ -51,6 +54,7 @@ If this repository is helpful, please give us a star ⭐ and cite relevant paper
 
     bash tools/dist_train.sh $CONFIG_PATH $NUM_GPU
     for example: bash tools/dist_train.sh configs/distillers/traditional_traning_strategy/swin-s_distill_res50_img_s3_s4.py 8
+
 
 
 ## Citing NKD and USKD
@@ -90,6 +94,16 @@ If this repository is helpful, please give us a star ⭐ and cite relevant paper
   author={Fan, Jiawei and Li, Chao and Liu, Xiaolong and Yao, Anabang},
   journal={Thirty-eighth Conference on Neural Information Processing Systems},
   year={2024}
+}
+```
+
+## Citing Af-DCD
+```
+@inproceedings{fan2023augmentation,
+  title={Augmentation-free Dense Contrastive Knowledge Distillation for Efficient Semantic Segmentation},
+  author={Fan, Jiawei and Li, Chao and Liu, Xiaolong and Song, Meina and Yao, Anbang},
+  booktitle={Thirty-seventh Conference on Neural Information Processing Systems},
+  year={2023}
 }
 ```
 
