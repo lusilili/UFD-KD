@@ -10,7 +10,7 @@ Here are some visulizations for the feature distribution in frequency domain (Vi
 Showing the mismatch of feature distribution across models, which is also the main problem our method tries to resolve, we proposed the UFD framework that decouples the feature in both spatial and channel dimensions to achieve better feature alignment in knowledge distillation.
 
 The strategy we apply for decoupling is quite simple which is based on the basic properties of Frequency domain(DC Components and AC Components). The process is shown as follows:
-![image](https://github.com/user-attachments/assets/3f4489bd-aab2-4080-977c-fb8cf9905823)
+<img src="https://github.com/user-attachments/assets/3f4489bd-aab2-4080-977c-fb8cf9905823" width="700px">
 
 This repository includes official implementation for the following papers:
 
