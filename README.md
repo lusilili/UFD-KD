@@ -4,8 +4,7 @@
 
 Here are some visulizations for the feature distribution in frequency domain (ViT-large and ResNet18):
 
-![heatmap](https://github.com/user-attachments/assets/5d2dba44-f605-4163-8d33-46cbd5509aba)
-<img src="https://github.com/user-attachments/assets/5d2dba44-f605-4163-8d33-46cbd5509aba" width="210px">
+<img src="https://github.com/user-attachments/assets/5d2dba44-f605-4163-8d33-46cbd5509aba" width="2100px">
 
 ![Distri2](https://github.com/user-attachments/assets/eb753fed-6b29-4a92-a31f-68ae5813add2)
 
