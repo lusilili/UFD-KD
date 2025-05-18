@@ -5,7 +5,7 @@
 Here are some visulizations for the feature distribution in frequency domain (ViT-large and ResNet18):
 
 <img src="https://github.com/user-attachments/assets/5d2dba44-f605-4163-8d33-46cbd5509aba" width="700px">
-<img src="https://github.com/user-attachments/assets/eb753fed-6b29-4a92-a31f-68ae5813add2" width="700px">
+<img src="https://github.com/user-attachments/assets/eb753fed-6b29-4a92-a31f-68ae5813add2" width="500px">
 
 Showing the mismatch of feature distribution across models, which is also the main problem our method tries to resolve, we proposed the UFD framework that decouples the feature in both spatial and channel dimensions to achieve better feature alignment in knowledge distillation.
 
