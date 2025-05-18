@@ -20,7 +20,7 @@ This repository includes official implementation for the following papers:
 
 * NeurIPS 2024: [ScaleKD](https://github.com/deep-optimization/ScaleKD): Strong Vision Transformers Could Be Excellent Teachers
 
-* [ViTKD](https://github.com/yzd-v/cls_KD/blob/1.0/vitkd.md): ViTKD: Practical Guidelines for ViT feature knowledge distillation
+* [ViTKD](https://github.com/yzd-v/cls_KD/blob/1.0/vitkd.md): Practical Guidelines for ViT feature knowledge distillation
 
 It also provides unofficial implementation for the following papers:
 * [KD](https://arxiv.org/abs/1503.02531), [DKD](https://openaccess.thecvf.com/content/CVPR2022/html/Zhao_Decoupled_Knowledge_Distillation_CVPR_2022_paper.html), [WSLD](https://arxiv.org/abs/2102.00650)
