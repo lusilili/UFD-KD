@@ -18,7 +18,7 @@ This repository includes official implementation for the following papers:
 
 * ICCV 2023: [NKD and USKD](https://github.com/yzd-v/cls_KD/blob/1.0/nkd.md): From Knowledge Distillation to Self-Knowledge Distillation: A Unified Approach with Normalized Loss and Customized Soft Labels
 
-* [ScaleKD](https://github.com/deep-optimization/ScaleKD): ScaleKD: Strong Vision Transformers Could Be Excellent Teachers
+* NeurIPS 2024: [ScaleKD](https://github.com/deep-optimization/ScaleKD): Strong Vision Transformers Could Be Excellent Teachers
 
 * [ViTKD](https://github.com/yzd-v/cls_KD/blob/1.0/vitkd.md): ViTKD: Practical Guidelines for ViT feature knowledge distillation
 
